@@ -44,6 +44,7 @@ class Business(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="draft")
     channels_config: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     admin_channel: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    system_prompt: Mapped[str | None] = mapped_column(String, nullable=True)
     llm_provider: Mapped[str | None] = mapped_column(String(40), nullable=True)
     llm_api_key_encrypted: Mapped[str | None] = mapped_column(String(512), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, nullable=False)
