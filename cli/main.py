@@ -8,7 +8,6 @@ app = typer.Typer(help="CLI Agent Platform — developer command line")
 
 CREDENTIALS_PATH = Path.home() / ".platform" / "credentials"
 API_BASE_URL = os.environ.get("PLATFORM_API_URL", "http://localhost:8000")
-
 BUSINESS_ROOT = Path("businesses")
 
 
@@ -71,6 +70,59 @@ def agent_create(business_name: str):
 
     typer.echo(f"Created business '{business_name}' (id: {business['id']})")
     typer.echo(f"Local folder: {business_dir}/")
+
+
+@agent_app.command("edit")
+def agent_edit(business_name: str):
+    """Open the business's prompt.md — tries $EDITOR, falls back to a file-path hint (mobile/Replit friendly)."""
+    business_dir = BUSINESS_ROOT / business_name
+    prompt_path = business_dir / "prompt.md"
+
+    if not prompt_path.exists():
+        typer.echo(f"No such business locally: {prompt_path}")
+        typer.echo("Run 'platform agent create' first, or check you're in the right folder.")
+        raise typer.Exit(code=1)
+
+    editor = os.environ.get("EDITOR")
+    if editor and os.system(f'which {editor} > /dev/null 2>&1') == 0:
+        os.system(f'{editor} "{prompt_path}"')
+        typer.echo(f"Saved. Run 'platform agent test {business_name}' to try it, or 'publish' to go live.")
+    else:
+        typer.echo("No terminal editor found. Open this file in Replit's Files tab instead:")
+        typer.echo(f"  {prompt_path}")
+        typer.echo(f"After saving, run 'platform agent test {business_name}' to try it.")
+
+
+@agent_app.command("test")
+def agent_test(business_name: str, message: str = typer.Argument(..., help="Message to send to the agent")):
+    """Test the agent locally using draft files (prompt.md + knowledge/*.md) — no publish needed."""
+    business_dir = BUSINESS_ROOT / business_name
+    prompt_path = business_dir / "prompt.md"
+
+    if not prompt_path.exists():
+        typer.echo(f"No such business locally: {prompt_path}")
+        raise typer.Exit(code=1)
+
+    system_prompt = prompt_path.read_text().strip()
+
+    knowledge_dir = business_dir / "knowledge"
+    knowledge_snippets = []
+    if knowledge_dir.exists():
+        for f in knowledge_dir.glob("*.md"):
+            file_content = f.read_text().strip()
+            if any(w in file_content.lower() for w in message.lower().split()):
+                knowledge_snippets.append(file_content)
+
+    typer.echo("[NOTE: using a fake/mock LLM response — no real LLM key wired yet]")
+    typer.echo(f"System prompt used: {system_prompt}")
+    if knowledge_snippets:
+        typer.echo(f"Knowledge matched: {knowledge_snippets}")
+    else:
+        typer.echo("Knowledge matched: (none)")
+
+    fake_reply = f"[draft-mode fake reply] I received: '{message}'"
+    typer.echo("")
+    typer.echo(f"Agent: {fake_reply}")
 
 
 if __name__ == "__main__":
