@@ -1,16 +1,16 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
+
+from api.deps import get_current_developer
+from api.routes_businesses import router as businesses_router
+from core.models import Developer
 
 app = FastAPI(title="CLI Agent Platform API")
+app.include_router(businesses_router)
 
 
 @app.get("/health")
 def health():
     return {"status": "ok"}
-
-
-from fastapi import Depends
-from api.deps import get_current_developer
-from core.models import Developer
 
 
 @app.get("/whoami")
