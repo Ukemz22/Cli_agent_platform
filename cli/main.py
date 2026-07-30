@@ -144,7 +144,6 @@ def agent_publish(business_name: str):
 
     business_id = get_business_id(business_dir)
 
-    # Backup whatever is CURRENTLY live, before we overwrite it.
     current_resp = httpx.get(f"{API_BASE_URL}/businesses/{business_id}", headers=api_headers())
     if current_resp.status_code == 200:
         current_prompt = current_resp.json().get("system_prompt") or ""
@@ -200,6 +199,33 @@ def agent_rollback(business_name: str):
 
     typer.echo(f"Rolled back '{business_name}' to previous live prompt:")
     typer.echo(f"  {previous_prompt!r}")
+
+
+@agent_app.command("correct")
+def agent_correct(business_name: str, correction_text: str = typer.Argument(..., help="What the agent should remember going forward")):
+    """Teach the agent a correction — saves to local memory/corrections.md AND the live database."""
+    business_dir = BUSINESS_ROOT / business_name
+    corrections_path = business_dir / "memory" / "corrections.md"
+
+    if not (business_dir / "config.yml").exists():
+        typer.echo(f"No such business locally: {business_dir}")
+        raise typer.Exit(code=1)
+
+    business_id = get_business_id(business_dir)
+
+    with open(corrections_path, "a") as f:
+        f.write(f"- {correction_text}\n")
+
+    resp = httpx.post(
+        f"{API_BASE_URL}/businesses/{business_id}/memory",
+        json={"fact_text": correction_text},
+        headers=api_headers(),
+    )
+    if resp.status_code != 200:
+        typer.echo(f"API error: {resp.status_code} {resp.text}")
+        raise typer.Exit(code=1)
+
+    typer.echo(f"Correction saved for '{business_name}': {correction_text!r}")
 
 
 if __name__ == "__main__":

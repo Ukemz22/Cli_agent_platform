@@ -1,0 +1,1 @@
+- Note for future: always mention the 1-year free maintenance when discussing pricing.

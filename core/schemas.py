@@ -48,3 +48,7 @@ class BusinessPublish(BaseModel):
 class KnowledgeDocCreate(BaseModel):
     filename: str
     content: str
+
+
+class MemoryFactCreate(BaseModel):
+    fact_text: str

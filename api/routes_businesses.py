@@ -6,9 +6,9 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from core.db import get_db
-from core.models import Developer, Business, KnowledgeDoc, KnowledgeDoc
+from core.models import Developer, Business, KnowledgeDoc, MemoryFact, KnowledgeDoc
 from core.crypto import encrypt_key
-from core.schemas import BusinessCreate, BusinessRead, BusinessKeysSet, BusinessPublish, KnowledgeDocCreate, BusinessPublish, KnowledgeDocCreate
+from core.schemas import BusinessCreate, BusinessRead, BusinessKeysSet, BusinessPublish, KnowledgeDocCreate, MemoryFactCreate, BusinessPublish, KnowledgeDocCreate
 from api.deps import get_current_developer, get_owned_business
 
 router = APIRouter(prefix="/businesses", tags=["businesses"])
@@ -116,3 +116,15 @@ def add_knowledge_doc(
 
     db.commit()
     return {"status": "synced", "filename": payload.filename}
+
+
+@router.post("/{business_id}/memory")
+def add_memory_fact(
+    payload: MemoryFactCreate,
+    business: Business = Depends(get_owned_business),
+    db: Session = Depends(get_db),
+):
+    fact = MemoryFact(business_id=business.id, fact_text=payload.fact_text, source="cli_correction")
+    db.add(fact)
+    db.commit()
+    return {"status": "saved"}
