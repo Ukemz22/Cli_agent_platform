@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from core.db import get_db
 from core.models import Developer, Business, KnowledgeDoc, MemoryFact, KnowledgeDoc
 from core.crypto import encrypt_key
-from core.schemas import BusinessCreate, BusinessRead, BusinessKeysSet, BusinessPublish, KnowledgeDocCreate, MemoryFactCreate, BusinessPublish, KnowledgeDocCreate
+from core.schemas import BusinessCreate, BusinessRead, BusinessKeysSet, BusinessPublish, KnowledgeDocCreate, MemoryFactCreate, BusinessChannelsSet
 from api.deps import get_current_developer, get_owned_business
 
 router = APIRouter(prefix="/businesses", tags=["businesses"])
@@ -31,6 +31,23 @@ def create_business(
 def get_business(
     business: Business = Depends(get_owned_business),
 ):
+    return business
+
+
+@router.patch("/{business_id}/channels", response_model=BusinessRead)
+def set_business_channels(
+    payload: BusinessChannelsSet,
+    business: Business = Depends(get_owned_business),
+    db: Session = Depends(get_db),
+):
+    """Register a WhatsApp phone_number_id against this business."""
+    business.channels_config = {
+        **business.channels_config,
+        "whatsapp": {"phone_number_id": payload.whatsapp_phone_number_id},
+    }
+    db.add(business)
+    db.commit()
+    db.refresh(business)
     return business
 
 

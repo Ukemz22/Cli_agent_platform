@@ -1,9 +1,16 @@
 import hashlib
 import hmac
 
-from fastapi import APIRouter, Query, HTTPException, Request
+import httpx
+from fastapi import APIRouter, Query, HTTPException, Request, Depends
 from fastapi.responses import PlainTextResponse
+from sqlalchemy.orm import Session
+
 from core.config import settings
+from core.db import get_db
+from core.models import Business
+from core.agent_runtime import run_agent_turn
+from core.llm_factory import get_llm_for_business
 
 router = APIRouter(prefix="/webhooks/whatsapp", tags=["whatsapp"])
 
@@ -20,7 +27,7 @@ async def verify_webhook(
 
 
 def _verify_signature(raw_body: bytes, signature_header: str | None) -> bool:
-    """HMAC-SHA256 check using hmac.compare_digest (timing-safe, standard library — Rule 3)."""
+    """HMAC-SHA256 check using hmac.compare_digest (timing-safe, Rule 3)."""
     if not signature_header or not signature_header.startswith("sha256="):
         return False
     expected_hash = signature_header.removeprefix("sha256=")
@@ -30,8 +37,48 @@ def _verify_signature(raw_body: bytes, signature_header: str | None) -> bool:
     return hmac.compare_digest(computed_hash, expected_hash)
 
 
+def _find_business_by_phone_number_id(db: Session, phone_number_id: str) -> Business | None:
+    """
+    Find the business whose channels_config["whatsapp"]["phone_number_id"]
+    matches the incoming webhook. Filters in Python — there are few businesses
+    per deployment so a full scan is acceptable here.
+    """
+    businesses = db.query(Business).filter(Business.status.in_(["active", "live"])).all()
+    for b in businesses:
+        if (
+            isinstance(b.channels_config, dict)
+            and b.channels_config.get("whatsapp", {}).get("phone_number_id") == phone_number_id
+        ):
+            return b
+    return None
+
+
+def _send_whatsapp_reply(phone_number_id: str, to: str, text: str) -> None:
+    """
+    Send a text reply to the customer via the WhatsApp Cloud API.
+    Raises HTTPException(502) if Meta's API returns a non-2xx status.
+    """
+    url = f"https://graph.facebook.com/v19.0/{phone_number_id}/messages"
+    resp = httpx.post(
+        url,
+        json={
+            "messaging_product": "whatsapp",
+            "to": to,
+            "type": "text",
+            "text": {"body": text},
+        },
+        headers={"Authorization": f"Bearer {settings.whatsapp_access_token}"},
+        timeout=10.0,
+    )
+    if resp.status_code not in (200, 201):
+        raise HTTPException(
+            status_code=502,
+            detail=f"WhatsApp send failed: {resp.status_code} {resp.text}",
+        )
+
+
 @router.post("")
-async def receive_webhook(request: Request):
+async def receive_webhook(request: Request, db: Session = Depends(get_db)):
     raw_body = await request.body()
     signature = request.headers.get("X-Hub-Signature-256")
 
@@ -42,9 +89,33 @@ async def receive_webhook(request: Request):
     parsed = parse_incoming_message(payload)
 
     if parsed is None:
+        # Status updates, delivery receipts, etc. — acknowledge and ignore
         return {"status": "ignored"}
 
-    return {"status": "received", "parsed": parsed}
+    business = _find_business_by_phone_number_id(db, parsed["phone_number_id"])
+    if business is None:
+        # No business registered for this phone number — acknowledge Meta but don't process
+        return {"status": "no_business_found"}
+
+    llm = get_llm_for_business(business)
+    result = run_agent_turn(
+        db=db,
+        business=business,
+        customer_message=parsed["text"],
+        llm=llm,
+        channel="whatsapp",
+        customer_id=parsed["from"],
+    )
+    db.commit()
+
+    _send_whatsapp_reply(
+        phone_number_id=parsed["phone_number_id"],
+        to=parsed["from"],
+        text=result.reply_text,
+    )
+
+    return {"status": "sent", "escalated": result.escalated}
+
 
 def parse_incoming_message(payload: dict) -> dict | None:
     """Extract {phone_number_id, from, text} from a WhatsApp webhook payload.

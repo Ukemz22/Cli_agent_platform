@@ -62,7 +62,7 @@ def run_agent_turn(
     channel: str = "test",
     customer_id: str = "test-customer",
 ) -> AgentResult:
-    if business.status != "active":
+    if business.status not in ("active", "live"):
         return AgentResult(reply_text="This service is currently paused.", escalated=False)
 
     convo = _get_or_create_conversation(db, business, channel, customer_id)

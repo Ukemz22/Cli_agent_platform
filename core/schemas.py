@@ -52,3 +52,7 @@ class KnowledgeDocCreate(BaseModel):
 
 class MemoryFactCreate(BaseModel):
     fact_text: str
+
+
+class BusinessChannelsSet(BaseModel):
+    whatsapp_phone_number_id: str
