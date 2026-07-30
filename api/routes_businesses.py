@@ -6,9 +6,9 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from core.db import get_db
-from core.models import Developer, Business
+from core.models import Developer, Business, KnowledgeDoc, KnowledgeDoc
 from core.crypto import encrypt_key
-from core.schemas import BusinessCreate, BusinessRead, BusinessKeysSet
+from core.schemas import BusinessCreate, BusinessRead, BusinessKeysSet, BusinessPublish, KnowledgeDocCreate, BusinessPublish, KnowledgeDocCreate
 from api.deps import get_current_developer, get_owned_business
 
 router = APIRouter(prefix="/businesses", tags=["businesses"])
@@ -46,3 +46,73 @@ def set_business_keys(
     db.commit()
     db.refresh(business)
     return business
+
+
+@router.patch("/{business_id}/publish", response_model=BusinessRead)
+def publish_business(
+    payload: BusinessPublish,
+    business: Business = Depends(get_owned_business),
+    db: Session = Depends(get_db),
+):
+    business.system_prompt = payload.system_prompt
+    business.status = "live"
+    db.add(business)
+    db.commit()
+    db.refresh(business)
+    return business
+
+
+@router.post("/{business_id}/knowledge")
+def add_knowledge_doc(
+    payload: KnowledgeDocCreate,
+    business: Business = Depends(get_owned_business),
+    db: Session = Depends(get_db),
+):
+    existing = db.query(KnowledgeDoc).filter(
+        KnowledgeDoc.business_id == business.id,
+        KnowledgeDoc.filename == payload.filename,
+    ).first()
+
+    if existing:
+        existing.content = payload.content
+    else:
+        existing = KnowledgeDoc(business_id=business.id, filename=payload.filename, content=payload.content)
+        db.add(existing)
+
+    db.commit()
+    return {"status": "synced", "filename": payload.filename}
+
+
+@router.patch("/{business_id}/publish", response_model=BusinessRead)
+def publish_business(
+    payload: BusinessPublish,
+    business: Business = Depends(get_owned_business),
+    db: Session = Depends(get_db),
+):
+    business.system_prompt = payload.system_prompt
+    business.status = "live"
+    db.add(business)
+    db.commit()
+    db.refresh(business)
+    return business
+
+
+@router.post("/{business_id}/knowledge")
+def add_knowledge_doc(
+    payload: KnowledgeDocCreate,
+    business: Business = Depends(get_owned_business),
+    db: Session = Depends(get_db),
+):
+    existing = db.query(KnowledgeDoc).filter(
+        KnowledgeDoc.business_id == business.id,
+        KnowledgeDoc.filename == payload.filename,
+    ).first()
+
+    if existing:
+        existing.content = payload.content
+    else:
+        existing = KnowledgeDoc(business_id=business.id, filename=payload.filename, content=payload.content)
+        db.add(existing)
+
+    db.commit()
+    return {"status": "synced", "filename": payload.filename}

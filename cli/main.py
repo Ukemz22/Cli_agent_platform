@@ -3,6 +3,7 @@ from pathlib import Path
 
 import httpx
 import typer
+import yaml
 
 app = typer.Typer(help="CLI Agent Platform — developer command line")
 
@@ -123,6 +124,45 @@ def agent_test(business_name: str, message: str = typer.Argument(..., help="Mess
     fake_reply = f"[draft-mode fake reply] I received: '{message}'"
     typer.echo("")
     typer.echo(f"Agent: {fake_reply}")
+
+
+@agent_app.command("publish")
+def agent_publish(business_name: str):
+    """Sync local draft files (prompt.md + knowledge/*.md) into the live database via the API."""
+    business_dir = BUSINESS_ROOT / business_name
+    config_path = business_dir / "config.yml"
+    prompt_path = business_dir / "prompt.md"
+
+    if not config_path.exists():
+        typer.echo(f"No such business locally: {config_path}")
+        raise typer.Exit(code=1)
+
+    config = yaml.safe_load(config_path.read_text())
+    business_id = config["business_id"]
+    system_prompt = prompt_path.read_text().strip()
+
+    resp = httpx.patch(
+        f"{API_BASE_URL}/businesses/{business_id}/publish",
+        json={"system_prompt": system_prompt},
+        headers=api_headers(),
+    )
+    if resp.status_code != 200:
+        typer.echo(f"API error: {resp.status_code} {resp.text}")
+        raise typer.Exit(code=1)
+
+    knowledge_dir = business_dir / "knowledge"
+    synced_docs = 0
+    if knowledge_dir.exists():
+        for f in knowledge_dir.glob("*.md"):
+            doc_resp = httpx.post(
+                f"{API_BASE_URL}/businesses/{business_id}/knowledge",
+                json={"filename": f.name, "content": f.read_text()},
+                headers=api_headers(),
+            )
+            if doc_resp.status_code == 200:
+                synced_docs += 1
+
+    typer.echo(f"Published '{business_name}': prompt updated, {synced_docs} knowledge doc(s) synced. Status: live.")
 
 
 if __name__ == "__main__":

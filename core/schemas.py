@@ -30,3 +30,21 @@ class BusinessRead(BaseModel):
 class BusinessKeysSet(BaseModel):
     provider: str
     api_key: str
+
+
+class BusinessPublish(BaseModel):
+    system_prompt: str
+
+
+class KnowledgeDocCreate(BaseModel):
+    filename: str
+    content: str
+
+
+class BusinessPublish(BaseModel):
+    system_prompt: str
+
+
+class KnowledgeDocCreate(BaseModel):
+    filename: str
+    content: str
