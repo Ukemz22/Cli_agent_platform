@@ -15,6 +15,12 @@ class Settings(BaseSettings):
     # Used later (Chapter 2) for token hashing — declared now so .env shape is stable.
     secret_key: str = "change-me-in-.env"
 
+    # WhatsApp Cloud API (Chapter 5)
+    whatsapp_access_token: str
+    whatsapp_phone_number_id: str
+    whatsapp_app_secret: str
+    whatsapp_verify_token: str
+
     @field_validator("database_url")
     @classmethod
     def force_psycopg_driver(cls, v: str) -> str:
