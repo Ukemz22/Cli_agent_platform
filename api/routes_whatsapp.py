@@ -39,3 +39,22 @@ async def receive_webhook(request: Request):
         raise HTTPException(status_code=403, detail="Invalid signature")
 
     return {"status": "received"}
+
+def parse_incoming_message(payload: dict) -> dict | None:
+    """Extract {phone_number_id, from, text} from a WhatsApp webhook payload.
+    Returns None if this event isn't an actual text message (e.g. status update)."""
+    try:
+        value = payload["entry"][0]["changes"][0]["value"]
+        messages = value.get("messages")
+        if not messages:
+            return None
+        message = messages[0]
+        if message.get("type") != "text":
+            return None
+        return {
+            "phone_number_id": value["metadata"]["phone_number_id"],
+            "from": message["from"],
+            "text": message["text"]["body"],
+        }
+    except (KeyError, IndexError):
+        return None
