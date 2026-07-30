@@ -47,6 +47,9 @@ def get_business_id(business_dir: Path) -> str:
 agent_app = typer.Typer(help="Manage a business's AI agent")
 app.add_typer(agent_app, name="agent")
 
+keys_app = typer.Typer(help="Manage a business's BYOK LLM keys")
+app.add_typer(keys_app, name="keys")
+
 
 @agent_app.command("create")
 def agent_create(business_name: str):
@@ -226,6 +229,33 @@ def agent_correct(business_name: str, correction_text: str = typer.Argument(...,
         raise typer.Exit(code=1)
 
     typer.echo(f"Correction saved for '{business_name}': {correction_text!r}")
+
+
+@keys_app.command("set")
+def keys_set(
+    business_name: str,
+    provider: str = typer.Option(..., "--provider", help="e.g. openai, anthropic, google"),
+    key: str = typer.Option(..., "--key", help="Your real BYOK LLM API key"),
+):
+    """Store a business's BYOK LLM key, encrypted server-side. Key never touches local disk."""
+    business_dir = BUSINESS_ROOT / business_name
+
+    if not (business_dir / "config.yml").exists():
+        typer.echo(f"No such business locally: {business_dir}")
+        raise typer.Exit(code=1)
+
+    business_id = get_business_id(business_dir)
+
+    resp = httpx.patch(
+        f"{API_BASE_URL}/businesses/{business_id}/keys",
+        json={"provider": provider, "api_key": key},
+        headers=api_headers(),
+    )
+    if resp.status_code != 200:
+        typer.echo(f"API error: {resp.status_code} {resp.text}")
+        raise typer.Exit(code=1)
+
+    typer.echo(f"Key set for '{business_name}': provider={provider}. Key stored encrypted, never written to disk.")
 
 
 if __name__ == "__main__":
