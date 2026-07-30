@@ -28,6 +28,10 @@ def get_llm_for_business(business: Business) -> LLMProvider:
         from core.openai_provider import OpenAIProvider
         return OpenAIProvider(api_key=raw_key)
 
+    if business.llm_provider == "groq":
+        from core.groq_provider import GroqProvider
+        return GroqProvider(api_key=raw_key)
+
     raise HTTPException(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         detail=f"Unsupported LLM provider: {business.llm_provider!r}",
