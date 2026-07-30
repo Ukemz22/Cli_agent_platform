@@ -39,6 +39,11 @@ def api_headers() -> dict:
     return {"Authorization": f"Bearer {load_token()}"}
 
 
+def get_business_id(business_dir: Path) -> str:
+    config = yaml.safe_load((business_dir / "config.yml").read_text())
+    return config["business_id"]
+
+
 agent_app = typer.Typer(help="Manage a business's AI agent")
 app.add_typer(agent_app, name="agent")
 
@@ -128,17 +133,23 @@ def agent_test(business_name: str, message: str = typer.Argument(..., help="Mess
 
 @agent_app.command("publish")
 def agent_publish(business_name: str):
-    """Sync local draft files (prompt.md + knowledge/*.md) into the live database via the API."""
+    """Sync local draft files (prompt.md + knowledge/*.md) into the live database via the API.
+    Backs up the CURRENT live prompt first, so 'rollback' can undo this."""
     business_dir = BUSINESS_ROOT / business_name
-    config_path = business_dir / "config.yml"
     prompt_path = business_dir / "prompt.md"
 
-    if not config_path.exists():
-        typer.echo(f"No such business locally: {config_path}")
+    if not (business_dir / "config.yml").exists():
+        typer.echo(f"No such business locally: {business_dir}")
         raise typer.Exit(code=1)
 
-    config = yaml.safe_load(config_path.read_text())
-    business_id = config["business_id"]
+    business_id = get_business_id(business_dir)
+
+    # Backup whatever is CURRENTLY live, before we overwrite it.
+    current_resp = httpx.get(f"{API_BASE_URL}/businesses/{business_id}", headers=api_headers())
+    if current_resp.status_code == 200:
+        current_prompt = current_resp.json().get("system_prompt") or ""
+        (business_dir / ".prompt_backup.md").write_text(current_prompt)
+
     system_prompt = prompt_path.read_text().strip()
 
     resp = httpx.patch(
@@ -163,6 +174,32 @@ def agent_publish(business_name: str):
                 synced_docs += 1
 
     typer.echo(f"Published '{business_name}': prompt updated, {synced_docs} knowledge doc(s) synced. Status: live.")
+
+
+@agent_app.command("rollback")
+def agent_rollback(business_name: str):
+    """Restore the previously-live prompt (saved automatically by the last 'publish')."""
+    business_dir = BUSINESS_ROOT / business_name
+    backup_path = business_dir / ".prompt_backup.md"
+
+    if not backup_path.exists():
+        typer.echo("No backup found — nothing to roll back to (need at least one prior publish).")
+        raise typer.Exit(code=1)
+
+    business_id = get_business_id(business_dir)
+    previous_prompt = backup_path.read_text()
+
+    resp = httpx.patch(
+        f"{API_BASE_URL}/businesses/{business_id}/publish",
+        json={"system_prompt": previous_prompt},
+        headers=api_headers(),
+    )
+    if resp.status_code != 200:
+        typer.echo(f"API error: {resp.status_code} {resp.text}")
+        raise typer.Exit(code=1)
+
+    typer.echo(f"Rolled back '{business_name}' to previous live prompt:")
+    typer.echo(f"  {previous_prompt!r}")
 
 
 if __name__ == "__main__":
