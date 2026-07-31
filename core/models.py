@@ -29,6 +29,7 @@ class Developer(Base):
     token_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending")
     plan: Mapped[str] = mapped_column(String(20), nullable=False, default="starter")
+    subscription_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     paystack_customer_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now, nullable=False)
 

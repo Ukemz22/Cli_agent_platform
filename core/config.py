@@ -21,6 +21,13 @@ class Settings(BaseSettings):
     whatsapp_app_secret: str
     whatsapp_verify_token: str
 
+    # Telegram Bot API (Chapter 6)
+    telegram_bot_token: str
+
+    # Paystack (Chapter 6)
+    paystack_secret_key: str
+    paystack_public_key: str
+
     @field_validator("database_url")
     @classmethod
     def force_psycopg_driver(cls, v: str) -> str:
