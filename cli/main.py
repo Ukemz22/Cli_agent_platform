@@ -51,6 +51,14 @@ keys_app = typer.Typer(help="Manage a business's BYOK LLM keys")
 app.add_typer(keys_app, name="keys")
 
 
+@app.callback(invoke_without_command=True)
+def main(ctx: typer.Context):
+    """Running with no subcommand opens the interactive menu."""
+    if ctx.invoked_subcommand is None:
+        from cli.tui import run_menu
+        run_menu()
+
+
 @agent_app.command("create")
 def agent_create(business_name: str):
     """Create a new business: scaffolds local folder + creates it via the API."""
